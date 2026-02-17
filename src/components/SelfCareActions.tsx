@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { ChevronDown, Droplets, Footprints, UtensilsCrossed, Wind, Coffee, Moon, Check } from 'lucide-react';
+import { getUserId } from '@/lib/auth';
+import { saveEnergyAction } from '@/lib/db';
 
 interface SelfCareActionsProps {
-  onAction: (type: string) => void;
+  onAction: () => void;
 }
 
 const ACTIONS = [
@@ -47,7 +49,7 @@ const CountdownRing = ({ duration, onDone }: { duration: number; onDone: () => v
 };
 
 const BreathingGuide = ({ onDone }: { onDone: () => void }) => {
-  const [phase, setPhase] = useState<'Inhale'|'Hold'|'Exhale'>('Inhale');
+  const [phase, setPhase] = useState<'Inhale' | 'Hold' | 'Exhale'>('Inhale');
   const [count, setCount] = useState(4);
   const [totalElapsed, setTotalElapsed] = useState(0);
   const DURATION = 120; // 2 minutes
@@ -99,10 +101,21 @@ const SelfCareActions = ({ onAction }: SelfCareActionsProps) => {
   const [activeTimer, setActiveTimer] = useState<string | null>(null);
   const [showMealTip, setShowMealTip] = useState(false);
 
+  const handleActionInternal = useCallback(async (type: string) => {
+    const userId = getUserId();
+    if (!userId) return;
+    try {
+      await saveEnergyAction(userId, type);
+      onAction();
+    } catch (error) {
+      console.error("Failed to save energy action:", error);
+    }
+  }, [onAction]);
+
   const handleTap = useCallback((key: string) => {
     if (completed.has(key)) return;
     if (key === 'water' || key === 'beverage') {
-      onAction(key);
+      handleActionInternal(key);
       setCompleted(prev => new Set(prev).add(key));
     } else if (key === 'walk') {
       setActiveTimer('walk');
@@ -112,14 +125,18 @@ const SelfCareActions = ({ onAction }: SelfCareActionsProps) => {
       setActiveTimer('breathing');
     } else if (key === 'meal') {
       setShowMealTip(!showMealTip);
+      if (!showMealTip) {
+        handleActionInternal('meal');
+        setCompleted(prev => new Set(prev).add('meal'));
+      }
     }
-  }, [completed, onAction, showMealTip]);
+  }, [completed, handleActionInternal, showMealTip]);
 
   const handleTimerDone = useCallback((key: string) => {
     setActiveTimer(null);
-    onAction(key);
+    handleActionInternal(key);
     setCompleted(prev => new Set(prev).add(key));
-  }, [onAction]);
+  }, [handleActionInternal]);
 
   return (
     <div className="card-base">

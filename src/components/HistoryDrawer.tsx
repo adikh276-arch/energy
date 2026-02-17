@@ -1,16 +1,19 @@
 import { EnergyLog, LEVEL_COLORS } from '@/types/energy';
 import { X, Download } from 'lucide-react';
 import { useState, useMemo } from 'react';
+import { useToast } from '@/hooks/use-toast';
 
 interface HistoryDrawerProps {
   open: boolean;
   onClose: () => void;
   logs: EnergyLog[];
-  onRemove: (id: string) => void;
+  onRemove: (id: string) => Promise<void>;
 }
 
 const HistoryDrawer = ({ open, onClose, logs, onRemove }: HistoryDrawerProps) => {
+  const { toast } = useToast();
   const [search, setSearch] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // 7-day chart data
   const chartData = useMemo(() => {
@@ -40,9 +43,9 @@ const HistoryDrawer = ({ open, onClose, logs, onRemove }: HistoryDrawerProps) =>
   const grouped = useMemo(() => {
     const filtered = search
       ? logs.filter(l =>
-          l.notes.toLowerCase().includes(search.toLowerCase()) ||
-          l.factors.some(f => f.toLowerCase().includes(search.toLowerCase())) ||
-          l.energyType.toLowerCase().includes(search.toLowerCase()))
+        l.notes.toLowerCase().includes(search.toLowerCase()) ||
+        l.factors.some(f => f.toLowerCase().includes(search.toLowerCase())) ||
+        l.energyType.toLowerCase().includes(search.toLowerCase()))
       : logs;
 
     const map = new Map<string, EnergyLog[]>();
@@ -64,6 +67,19 @@ const HistoryDrawer = ({ open, onClose, logs, onRemove }: HistoryDrawerProps) =>
     const a = document.createElement('a');
     a.href = url; a.download = `energy-logs-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click(); URL.revokeObjectURL(url);
+  };
+
+  const handleRemoveInternal = async (id: string) => {
+    setDeletingId(id);
+    try {
+      await onRemove(id);
+      toast({ description: "Entry removed" });
+    } catch (error) {
+      console.error("Failed to remove log:", error);
+      toast({ variant: "destructive", description: "Failed to remove entry" });
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   if (!open) return null;
@@ -141,7 +157,12 @@ const HistoryDrawer = ({ open, onClose, logs, onRemove }: HistoryDrawerProps) =>
             <div key={date} className="mb-4">
               <p className="text-[12px] font-dm font-medium text-muted-foreground mb-2">{date}</p>
               {dayLogs.map(log => (
-                <HistoryEntry key={log.id} log={log} onRemove={() => onRemove(log.id)} />
+                <HistoryEntry
+                  key={log.id}
+                  log={log}
+                  onRemove={() => handleRemoveInternal(log.id)}
+                  isDeleting={deletingId === log.id}
+                />
               ))}
             </div>
           ))}
@@ -164,16 +185,18 @@ const HistoryDrawer = ({ open, onClose, logs, onRemove }: HistoryDrawerProps) =>
   );
 };
 
-const HistoryEntry = ({ log, onRemove }: { log: EnergyLog; onRemove: () => void }) => {
+const HistoryEntry = ({ log, onRemove, isDeleting }: { log: EnergyLog; onRemove: () => void; isDeleting: boolean }) => {
   const [swiped, setSwiped] = useState(false);
 
   return (
     <div className="relative overflow-hidden rounded-xl mb-2">
       <div className="absolute inset-y-0 right-0 flex items-center px-4 bg-alert text-[13px] font-dm font-medium"
-        style={{ width: 80, color: 'white' }} onClick={onRemove}>Remove</div>
+        style={{ width: 80, color: 'white' }} onClick={onRemove}>
+        {isDeleting ? "..." : "Remove"}
+      </div>
       <div className="relative bg-card border border-border rounded-xl px-4 py-3 transition-transform"
         style={{ transform: `translateX(${swiped ? -80 : 0}px)` }}
-        onTouchStart={() => {}}
+        onTouchStart={() => { }}
         onTouchEnd={() => setSwiped(!swiped)}
         onClick={() => setSwiped(!swiped)}>
         <div className="flex items-center gap-2">

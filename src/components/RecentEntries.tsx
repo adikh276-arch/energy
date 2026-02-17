@@ -1,5 +1,8 @@
 import { useState, useRef } from 'react';
 import { EnergyLog, LEVEL_COLORS, WATER_LABELS } from '@/types/energy';
+import { getUserId } from '@/lib/auth';
+import { deleteEnergyLog } from '@/lib/db';
+import { useToast } from '@/hooks/use-toast';
 
 interface RecentEntriesProps {
   logs: EnergyLog[];
@@ -32,20 +35,35 @@ const RecentEntries = ({ logs, onRemove, onViewAll }: RecentEntriesProps) => {
 };
 
 const SwipeEntry = ({ log, onRemove }: { log: EnergyLog; onRemove: () => void }) => {
+  const { toast } = useToast();
   const [offsetX, setOffsetX] = useState(0);
   const startX = useRef(0);
   const dragging = useRef(false);
+  const [deleting, setDeleting] = useState(false);
 
   const formatTime = (iso: string) =>
     new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+  const handleRemove = async () => {
+    setDeleting(true);
+    try {
+      await onRemove(log.id);
+      toast({ description: "Entry removed" });
+    } catch (error) {
+      console.error("Failed to remove log:", error);
+      toast({ variant: "destructive", description: "Failed to remove entry" });
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div className="relative overflow-hidden rounded-xl">
       {/* Remove bg */}
       <div className="absolute inset-y-0 right-0 flex items-center px-4 bg-alert text-alert-foreground text-[13px] font-dm font-medium"
         style={{ width: 80 }}
-        onClick={onRemove}>
-        Remove
+        onClick={!deleting ? handleRemove : undefined}>
+        {deleting ? "..." : "Remove"}
       </div>
 
       <div
